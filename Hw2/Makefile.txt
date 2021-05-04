@@ -1,0 +1,5 @@
+all: question1
+question1: question1.c
+	gcc -Wall -g  -o question1 question1.c
+clean:
+	rm -fr list list.o*~
