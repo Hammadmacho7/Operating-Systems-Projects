@@ -1,0 +1,138 @@
+This application implements the bounded buffer problem we have seen in
+the class. 
+
+ producer.c: the producer
+ consumer.c: the consumer
+ common.h: includes common definitions
+
+The applications implements two versions of critical sections: 1)
+protected with semaphores; 2) unprotected.  The SYNCHRONIZED macro in
+common.h file can is used to select which version to run. 
+
+The implementation uses POSIX named semaphores. 
+
+In this application, server (producer) has to be started up first. The we start the client.
+
+Producer will terminate first.
+
+
+- POSIX API provides a set of functions to declare and use
+semaphores. There are two types of POSIX semaphores, named semaphores
+and unnamed semaphores. You can obtain more information about
+semaphores by reading the man page sem_overview. For that, just type:
+
+man sem_overview
+
+- Here we provide an example application that uses named semaphores.  A
+named semaphore can be accessed by many processes using the same name
+to open it. The application is again the classical producer-consumer
+bounded-buffer problem. There is a bounded buffer between a producer
+process and a consumer process. It has BUFSIZE slots, hence can hold
+at most BUFSIZE items.
+
+The bounded buffer sits on a shared memory segment between the
+producer and consumer. A shared variable that keeps the number of
+items in the buffer is also sitting in the shared memory. We pack
+those data (buffer and count variable) into a structure defined
+below. The structure also contains two additional fields (variables):
+in and out. The in variable is accessed by the producer and the out
+variable is accessed by the consumer. These variables do not have to
+be sitting in the shared memory, but we put them into the shared data
+structure since they are related with accessing the buffer.
+
+struct shared_data {
+    int buf[BUFSIZE];    /* shared buffer */
+    int count;           /* current number of items in buffer */
+    int in;  /* points to the first empty slot */
+    int out; /* points to the first full slot */
+};
+
+This structure is defined in a header file, called common.h that
+is included by both the producer program and consumer program. It is
+shown below. It also includes the declarations of some macros such as
+the BUFSIZE, NUM_ITEMS, etc.
+
+
+The header file also contains the macro definitions (constants) of the
+names for 3 semaphores.  Different processes use the same name to
+acess the same semaphore.  One of the processes creates a semaphore by
+using the sem_open function with O_CREAT flag, and other processes
+can open the semaphore using the same sem_open function.
+
+#define SEMNAME_MUTEX       "/name_sem_mutex"
+#define SEMNAME_FULL        "/name_sem_fullcount"
+#define SEMNAME_EMPTY       "/name_sem_emptycount"
+
+The producer program first creates a shared memory segment that is
+just big enough to hold the structure defined above. The shared memory
+is created and attached using shm_open() and mmap functions(). As a
+result, the producer process gets the start address (an address in its
+own address space; this is a logical address) pointing to the start of
+the shared segment. That address is stored in the pointer variable
+shm_start.
+
+We also defined a pointer variable to point to the shared data. The
+variable name is sdp. It is initialized to point to the start of
+the shared memory segment. Hence the structure sits in the beginning
+of the shared segment. Then we can access the shared data structure by
+using this pointer. For example, the following lines of code
+initializes the buffer array and the count variable.
+
+sdp = (struct shared_data *) shm_start;
+for (i = 0; i < BUFSIZE; ++i)
+    sdp->buf[i] = 0;
+    sdp->count = 0;
+
+Those intialization statements are writing into the shared memory
+segment. Note that we could also use the shm_start variable to access
+the buffer and count. In this example, shm_start and sdp are pointing
+to the same place.
+
+The producer program then creates 3 semaphores and initializes them
+using the shm\_open function. There is one semaphore for mutual
+exclusion sem_mutex and two semaphores for synchronization
+sem_full and sem_empty.  The sem_mutex
+semaphore is initialized to 1, the sem_full is initiazed to 0
+(indicates the number of full slots), and sem_empty is initialized
+to BUFSIZE (indicates the number of empty slots).
+
+Then in a while loop, the producer tries to put a new item into buffer
+if there is an empty slot (i.e., if the empty semaphore did not reach
+to zero; otherwise it blocks). If there is empty slot available, the
+producer goes and puts an item into buffer. But to prevent the
+consumer also accessing the buffer, the producer (and also the
+consumer) has to do a wait() operation on the sem_mutex semaphore.
+This ensures that only one of them will be updating the buffer at a
+time.
+
+Inside the while loop, we see two pieces of code conditioned on the
+SYNCHRONIZED macro. This macro is defined in file common.h. If it is
+set to 1, it means we would like to synchronize the producer and
+consumer using semaphores. Hence the code should work correctly. If it
+is set to 0, it means that we don't use  synchronization tool,
+ and this may cause race conditions. In this case, busy
+waiting is used to check whether the buffer has at least one empty
+slot or not.
+
+The consumer program is similar. It opens the shared memory segment
+(does not create it), and then also opens the semaphores that were
+created by the producer.  Then the consumer tries to retrieve an item
+from the buffer if it has one. It checks this by doing a wait
+operation on the sem\_full semaphore. If there is no item in the
+buffer, that semaphore will have a value 0 and a wait() operation on
+it will cause the consumer to sleep, until the producer puts an item
+into the buffer and issues a post() operation on the same
+semaphore. As said earlier, the consumer has to do a wait operation on
+ sem_mutex as well before updating the buffer. This is because,
+if 1 $<$ count $<$ BUFSIZE, both producer and consumer may be in a
+situation to update the buffer. Producer will not sleep on
+sem_empty and consumer will not sleep on sem\_full. So they
+can be around accessing the buffer for putting or retrieving an item
+nearly at the same time. Therefore we need  sem_mutex to allow
+only one of them to update the buffer at a time.
+
+
+There is a Makefile that can be used to compile these programs. As the
+result, two executable files will be obtained:  producer and
+consumer. We need to run the producer first. Then the consumer.
+

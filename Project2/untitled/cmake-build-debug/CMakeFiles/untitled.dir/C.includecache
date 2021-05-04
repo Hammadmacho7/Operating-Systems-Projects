@@ -1,0 +1,28 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/hammadmacho7/Desktop/CS342/Project2/untitled/main.c
+stdio.h
+-
+pthread.h
+-
+stdlib.h
+-
+math.h
+-
+unistd.h
+-
+time.h
+-
+sys/time.h
+-
+stdlib.h
+-
+string.h
+-
+
